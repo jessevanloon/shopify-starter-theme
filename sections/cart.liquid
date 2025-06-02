@@ -1,37 +1,102 @@
-{% comment %}
-  This section is used in the cart template to render /cart page with an
-  overview of the items in customer's cart.
-
-  https://shopify.dev/docs/storefronts/themes/architecture/templates/cart
-{% endcomment %}
-
+<!-- sections/cart-section.liquid -->
 <h1>{{ 'cart.title' | t }}</h1>
 
-<form action="{{ routes.cart_url }}" method="post">
-  <table>
-    {% for item in cart.items %}
-      <tr>
-        <td>
-          {% render 'image', image: item.image, url: item.url %}
-        </td>
-        <td>
-          <p>{{ item.product.title }}</p>
-          {{ 'cart.remove' | t | link_to: item.url_to_remove }}
-        </td>
-        <td>
-          <input type="text" name="updates[]" value="{{ item.quantity }}">
-          <input type="submit" value="{{ 'cart.update' | t }}">
-        </td>
-      </tr>
-    {% endfor %}
-  </table>
+<div data-section-id="cart-section" id="cart-section">
+  <form action="{{ routes.cart_url }}" method="post">
+    <div class="cart">
+      <div class="cart__items">
+        {% for item in cart.items %}
+          <div class="cart__item" data-key="{{ item.key }}">
+            <div class="cart__item_image">
+              {% render 'image', image: item.image, url: item.url %}
+            </div>
+            <div class="cart__item_text">
+              <div class="title">{{ item.product.title }}</div>
+              <div class="price">{{ item.price | money }}</div>
+            </div>
+            <div class="cart__item_quantity">
+              <input
+                type="number"
+                class="quantity-input"
+                value="{{ item.quantity }}"
+                min="0"
+                data-key="{{ item.key }}"
+              >
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+      <div class="cart__total-price">
+        Totale prijs: {{ cart.total_price | money }}
+      </div>
+    </div>
+    <input type="submit" name="checkout" value="{{ 'cart.checkout' | t }}">
+  </form>
+</div>
 
-  <input type="submit" name="checkout" value="{{ 'cart.checkout' | t }}">
-</form>
+{% style %}
+.cart {
+  width: 100%;
+}
+.cart__items {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.cart__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.cart__item_image {
+  width: 100%;
+  max-width: 250px;
+  object-fit: cover;
+}
+.cart__total-price {
+  margin: 24px 0;
+  font-weight: bold;
+  font-size: 28px;
+}
+{% endstyle %}
+
+{% javascript %}
+  document.addEventListener('input', function (e) {
+    if (!e.target.classList.contains('quantity-input')) return;
+
+    const quantity = parseInt(e.target.value, 10);
+    const key = e.target.dataset.key;
+
+    fetch('/cart/change.js', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: key,
+        quantity: quantity,
+        sections: 'cart,header'
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      const parser = new DOMParser();
+
+      const cartHtml = parser.parseFromString(data.sections['cart'], 'text/html');
+      const updatedCart = cartHtml.querySelector('#cart-section');
+      document.querySelector('#cart-section').innerHTML = updatedCart.innerHTML;
+
+      const headerHtml = parser.parseFromString(data.sections['header'], 'text/html');
+      const updatedHeader = headerHtml.querySelector('header');
+      document.querySelector('header').innerHTML = updatedHeader.innerHTML;
+    })
+    .catch(err => console.error('Cart update failed:', err));
+  });
+{% endjavascript %}
+
 
 {% schema %}
 {
-  "name": "t:general.cart",
+  "name": "Cart Section",
   "settings": []
 }
 {% endschema %}
